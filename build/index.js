@@ -1,12 +1,17 @@
 'use strict';
 
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.YeelightSearch = undefined;
+
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _events = require('events');
 
 var _events2 = _interopRequireDefault(_events);
 
-var _nodeSsdp = require('node-ssdp');
+var _reactNativeSsdp = require('react-native-ssdp');
 
 var _Yeelight = require('./Yeelight');
 
@@ -20,6 +25,8 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
+var client = void 0;
+
 /**
  * Create a new instance of the YeelightSearch class
  * and start searching for new Yeelights
@@ -28,7 +35,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
  *
  * @extends EventEmitter
  */
-var YeelightSearch = function (_EventEmitter) {
+
+var YeelightSearch = exports.YeelightSearch = function (_EventEmitter) {
   _inherits(YeelightSearch, _EventEmitter);
 
   function YeelightSearch() {
@@ -37,9 +45,9 @@ var YeelightSearch = function (_EventEmitter) {
     var _this = _possibleConstructorReturn(this, (YeelightSearch.__proto__ || Object.getPrototypeOf(YeelightSearch)).call(this));
 
     _this.yeelights = [];
-    _this.client = new _nodeSsdp.Client({ ssdpPort: 1982 });
+    client = new _reactNativeSsdp.Client({ ssdpPort: 1982 });
 
-    _this.client.on('response', function (data) {
+    client.on('response', function (data) {
       var yeelight = _this.yeelights.find(function (item) {
         return item.getId() === data.ID;
       });
@@ -50,7 +58,7 @@ var YeelightSearch = function (_EventEmitter) {
       }
     });
 
-    _this.client.search('wifi_bulb');
+    client.search('wifi_bulb');
     return _this;
   }
 
@@ -79,9 +87,12 @@ var YeelightSearch = function (_EventEmitter) {
         return item.getId() === id;
       });
     }
+  }, {
+    key: 'stopDiscovery',
+    value: function stopDiscovery() {
+      client.stop();
+    }
   }]);
 
   return YeelightSearch;
 }(_events2.default);
-
-module.exports = YeelightSearch;

@@ -1,7 +1,9 @@
 import EventEmitter from 'events';
-import { Client } from 'node-ssdp';
+import { Client } from 'react-native-ssdp'
 
 import Yeelight from './Yeelight';
+
+let client
 
 /**
  * Create a new instance of the YeelightSearch class
@@ -11,14 +13,14 @@ import Yeelight from './Yeelight';
  *
  * @extends EventEmitter
  */
-class YeelightSearch extends EventEmitter {
+export class YeelightSearch extends EventEmitter {
   constructor() {
     super();
 
     this.yeelights = [];
-    this.client = new Client({ ssdpPort: 1982 });
+    client = new Client({ ssdpPort: 1982 });
 
-    this.client.on('response', (data) => {
+    client.on('response', (data) => {
       let yeelight = this.yeelights.find(item => item.getId() === data.ID);
       if (!yeelight) {
         yeelight = new Yeelight(data);
@@ -27,7 +29,7 @@ class YeelightSearch extends EventEmitter {
       }
     });
 
-    this.client.search('wifi_bulb');
+    client.search('wifi_bulb');
   }
 
   /**
@@ -46,6 +48,8 @@ class YeelightSearch extends EventEmitter {
   getYeelightById(id) {
     return this.yeelights.find(item => item.getId() === id);
   }
-}
 
-module.exports = YeelightSearch;
+  stopDiscovery() {
+    client.stop()
+  }
+}

@@ -1,10 +1,9 @@
-import net from 'net';
-import Joi from 'joi';
-import url from 'url';
-import debug from 'debug';
-import EventEmitter from 'events';
+import net from 'react-native-tcp'
+import Joi from 'react-native-joi'
+import url from 'url'
+import EventEmitter from 'events'
 
-import { hexToRgb } from './utils';
+import { hexToRgb } from './utils'
 
 /**
  * Class Yeelight provides all functionality
@@ -20,36 +19,53 @@ import { hexToRgb } from './utils';
  * @extends EventEmitter
  */
 export default class Yeelight extends EventEmitter {
-  constructor(data) {
-    super();
+  constructor (data) {
+    super()
 
     if (typeof data === 'undefined' || typeof data !== 'object') {
-      throw new Error('options are needed');
+      throw new Error('options are needed')
     }
 
-    const parsedUri = url.parse(data.LOCATION);
+    const parsedUri = url.parse(data.LOCATION)
     if (parsedUri.protocol !== 'yeelight:') {
-      throw new Error(`${parsedUri.protocol} is not supported`);
+      throw new Error(`${parsedUri.protocol} is not supported`)
     }
 
-    this.id = data.ID;
-    this.name = data.NAME;
-    this.model = data.MODEL;
-    this.port = parsedUri.port;
-    this.hostname = parsedUri.hostname;
-    this.supports = data.SUPPORT.split(' ');
+    this.id = data.ID
+    this.name = data.NAME
+    this.model = data.MODEL
+    this.port = parsedUri.port
+    this.hostname = parsedUri.hostname
+    this.supports = data.SUPPORT.split(' ')
+    this.power = data.POWER
+    this.brightness = data.BRIGHT
+    this.hue = data.HUE
+    this.rgb = data.RGB
+    this.sat = data.SAT
+    this.colorTemperature = data.CT
+    this.mode = data.COLOR_MODE
 
-    this.reqCount = 1;
-    this.log = debug(`Yeelight-${this.name}`);
+    this.reqCount = 1
 
-    this.socket = new net.Socket();
+    this.socket = new net.Socket()
 
-    this.socket.on('end', this.formatResponse.bind(this));
+    this.socket.on('data', this.formatResponse.bind(this))
 
     this.socket.connect(this.port, this.hostname, () => {
-      this.log(`connected to ${this.name} ${this.hostname}:${this.port}`);
-      this.emit('connected');
-    });
+      this.emit('connected')
+    })
+
+    this.socket.on('end', () => {
+      this.disconnect()
+    })
+  }
+
+  /*
+  Close socket connection
+  */
+  disconnect () {
+    this.socket.end()
+    return this
   }
 
   /**
@@ -60,40 +76,38 @@ export default class Yeelight extends EventEmitter {
    * @param {object} params array with params ['on', 'smooth', '1000']
    * @param {object} schema schema for validation
    */
-  sendRequest(method, params, schema) {
+  sendRequest (method, params, schema) {
     return new Promise((resolve, reject) => {
       if (!schema) {
-        schema = Joi.any(); //eslint-disable-line
+        schema = Joi.any() //eslint-disable-line
       }
 
       if (!this.supports.includes(method)) {
-        reject(new Error(`unsupported method: ${method}`));
-        return;
+        reject(new Error(`unsupported method: ${method}`))
+        return
       }
 
       Joi.validate(params, schema, (err, value) => {
         if (err) {
-          reject(err);
-          return;
+          reject(err)
+          return
         }
 
         const req = JSON.stringify({
           method,
           params: value,
           id: this.reqCount,
-        });
-        this.log(`sending req: ${req}`);
-
+        })
         this.socket.write(`${req}\r\n`, (err) => {
           if (err) {
-            reject(err);
-            return;
+            reject(err)
+            return
           }
-          resolve();
-        });
-        this.reqCount += 1;
-      });
-    });
+          resolve()
+        })
+        this.reqCount += 1
+      })
+    })
   }
 
   /**
@@ -103,25 +117,22 @@ export default class Yeelight extends EventEmitter {
    *
    * @param {string} resp response comming from the socket as a json string
    */
-  formatResponse(resp) {
-    const json = JSON.parse(resp);
-    const id = json.id;
-    const result = json.result;
+  formatResponse (resp) {
+    var json = JSON.stringify(resp)
+    json = JSON.parse(json)
+    const id = json.id
+    const result = json.result
 
     if (!id) {
-      this.log(`got response without id: ${resp.toString().replace(/\r\n/, '')}`);
-      this.emit('notifcation', json);
-      return;
+      this.emit('notifcation', json)
+      return
     }
-
-    this.log(`got response: ${resp.toString().replace(/\r\n/, '')}`);
-
     if (json && json.error) {
-      const error = new Error(json.error.message);
-      error.code = json.error.code;
-      this.emit('error', id, error);
+      const error = new Error(json.error.message)
+      error.code = json.error.code
+      this.emit('error', id, error)
     } else {
-      this.emit('response', id, result);
+      this.emit('response', id, result)
     }
   }
 
@@ -129,24 +140,24 @@ export default class Yeelight extends EventEmitter {
    * returns The ID provided by the Yeelight
    * @returns {string} uuid given by the yeelightData
    */
-  getId() {
-    return this.id;
+  getId () {
+    return this.id
   }
 
   /**
    * returns The MODEL provided by the Yeelight
    * @returns {string} model string 'color' or 'mono'
    */
-  getModel() {
-    return this.model;
+  getModel () {
+    return this.model
   }
 
   /**
    * returns The NAME provided by the Yeelight
    * @returns {string} Yeelight name
    */
-  getName() {
-    return this.name;
+  getName () {
+    return this.name
   }
 
   /**
@@ -154,11 +165,11 @@ export default class Yeelight extends EventEmitter {
    * @param {string} name
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setName(name) {
+  setName (name) {
     const schema = Joi.array().items(
       Joi.string().required()
-    );
-    return this.sendRequest('set_name', [name], schema);
+    )
+    return this.sendRequest('set_name', [name], schema)
   }
 
   /**
@@ -172,16 +183,25 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  getValues(...props) {
-    return this.sendRequest('get_prop', props);
+  getValues (...props) {
+    return new Promise((resolve, reject) => {
+      this.socket.on('response', (data) => {
+        clearTimeout(timeout)
+        resolve(data)
+      })
+      let timeout = setTimeout(() => {
+        reject(new Error('timeout'))
+      }, 5000)
+      this.sendRequest('get_prop', props)
+    })
   }
 
   /**
    * This method is used to toggle the smart LED.
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  toggle() {
-    return this.sendRequest('toggle', []);
+  toggle () {
+    return this.sendRequest('toggle', [])
   }
 
   /**
@@ -190,8 +210,8 @@ export default class Yeelight extends EventEmitter {
    * the smart LED will show last saved state.
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setDefaultState() {
-    return this.sendRequest('set_default', []);
+  setDefaultState () {
+    return this.sendRequest('set_default', [])
   }
 
   /**
@@ -215,13 +235,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setColorTemperature(temperature, effect = 'smooth', time = 1000) {
+  setColorTemperature (temperature, effect = 'smooth', time = 1000) {
     const schema = Joi.array().items(
       Joi.number().min(1700).max(6500).required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_ct_abx', [temperature, effect, time], schema);
+    )
+    return this.sendRequest('set_ct_abx', [temperature, effect, time], schema)
   }
 
   /**
@@ -240,13 +260,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setBrightness(brightness, effect = 'smooth', time = 1000) {
+  setBrightness (brightness, effect = 'smooth', time = 1000) {
     const schema = Joi.array().items(
       Joi.number().min(0).max(100).required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_bright', [brightness, effect, time], schema);
+    )
+    return this.sendRequest('set_bright', [brightness, effect, time], schema)
   }
 
   /**
@@ -261,13 +281,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  turnOn(effect = 'smooth', time = 1000) {
+  turnOn (effect = 'smooth', time = 1000) {
     const schema = Joi.array().items(
       Joi.any().required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_power', ['on', effect, time], schema);
+    )
+    return this.sendRequest('set_power', ['on', effect, time], schema)
   }
 
   /**
@@ -282,13 +302,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  turnOff(effect = 'smooth', time = 1000) {
+  turnOff (effect = 'smooth', time = 1000) {
     const schema = Joi.array().items(
       Joi.any().required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_power', ['off', effect, time], schema);
+    )
+    return this.sendRequest('set_power', ['off', effect, time], schema)
   }
 
   /**
@@ -312,14 +332,14 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setScene(params) {
+  setScene (params) {
     const schema = Joi.array().items(
       Joi.string().allow('color', 'hsv', 'ct', 'auto_delay_off').required(),
       Joi.any().required(),
       Joi.any().required(),
       Joi.any()
-    );
-    return this.sendRequest('set_scene', params, schema);
+    )
+    return this.sendRequest('set_scene', params, schema)
   }
 
   /**
@@ -337,15 +357,15 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setRGB(hex, effect = 'smooth', time = 1000) {
-    const color = hexToRgb(hex);
-    const colorDec = (color.red * 65536) + (color.green * 256) + color.blue;
+  setRGB (hex, effect = 'smooth', time = 1000) {
+    const color = hexToRgb(hex)
+    const colorDec = (color.red * 65536) + (color.green * 256) + color.blue
     const schema = Joi.array().items(
       Joi.number().min(0).max(16777215).required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_rgb', [colorDec, effect, time], schema);
+    )
+    return this.sendRequest('set_rgb', [colorDec, effect, time], schema)
   }
 
   /**
@@ -366,14 +386,14 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setHSV(hue, saturation, effect = 'smooth', time = 100) {
+  setHSV (hue, saturation, effect = 'smooth', time = 100) {
     const schema = Joi.array().items(
       Joi.number().min(0).max(359).required(),
       Joi.number().min(0).max(100).required(),
       Joi.string().allow('sudden', 'smooth').required(),
       Joi.number().required()
-    );
-    return this.sendRequest('set_hsv', [hue, saturation, effect, time], schema);
+    )
+    return this.sendRequest('set_hsv', [hue, saturation, effect, time], schema)
   }
 
   /**
@@ -386,12 +406,12 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  addCron(type, value) {
+  addCron (type, value) {
     const schema = Joi.array().items(
       Joi.number().required(),
       Joi.number().required()
-    );
-    return this.sendRequest('cron_add', [type, value], schema);
+    )
+    return this.sendRequest('cron_add', [type, value], schema)
   }
 
   /**
@@ -403,11 +423,11 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  getCron(index) {
+  getCron (index) {
     const schema = Joi.array().items(
       Joi.number().required()
-    );
-    return this.sendRequest('cron_get', [index], schema);
+    )
+    return this.sendRequest('cron_get', [index], schema)
   }
 
   /**
@@ -419,11 +439,11 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  deleteCron(index) {
+  deleteCron (index) {
     const schema = Joi.array().items(
       Joi.number().required()
-    );
-    return this.sendRequest('cron_del', [index], schema);
+    )
+    return this.sendRequest('cron_del', [index], schema)
   }
 
   /**
@@ -444,12 +464,12 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setAdjust(action, prop) {
+  setAdjust (action, prop) {
     const schema = Joi.array().items(
       Joi.string().allow('increase', 'decrease', 'circle').required(),
       Joi.string().allow('bright', 'ct', 'color').required()
-    );
-    return this.sendRequest('set_adjust', [action, prop], schema);
+    )
+    return this.sendRequest('set_adjust', [action, prop], schema)
   }
 
   /**
@@ -466,13 +486,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  setMusicMode(action, host, port) {
+  setMusicMode (action, host, port) {
     const schema = Joi.array().items(
       Joi.number().allow(0, 1).required(),
       Joi.string().required(),
       Joi.number().min(1).max(65535).required()
-    );
-    return this.sendRequest('set_music', [action, host, port], schema);
+    )
+    return this.sendRequest('set_music', [action, host, port], schema)
   }
 
   /**
@@ -492,13 +512,13 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  startColorFlow(count, action, flowExpression) {
+  startColorFlow (count, action, flowExpression) {
     const schema = Joi.array().items(
       Joi.number().required(),
       Joi.number().allow(0, 1, 2).required(),
       Joi.string().required()
-    );
-    return this.sendRequest('start_cf', [action, action, flowExpression], schema);
+    )
+    return this.sendRequest('start_cf', [action, action, flowExpression], schema)
   }
 
   /**
@@ -509,7 +529,7 @@ export default class Yeelight extends EventEmitter {
    *
    * @returns {Promise} will be invoked after successfull or failed send
    */
-  stopColorFlow() {
-    return this.sendRequest('stop_cf', []);
+  stopColorFlow () {
+    return this.sendRequest('stop_cf', [])
   }
 }

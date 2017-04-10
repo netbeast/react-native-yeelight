@@ -4,25 +4,21 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _net = require('net');
+var _reactNativeTcp = require('react-native-tcp');
 
-var _net2 = _interopRequireDefault(_net);
+var _reactNativeTcp2 = _interopRequireDefault(_reactNativeTcp);
 
-var _joi = require('joi');
+var _reactNativeJoi = require('react-native-joi');
 
-var _joi2 = _interopRequireDefault(_joi);
+var _reactNativeJoi2 = _interopRequireDefault(_reactNativeJoi);
 
 var _url = require('url');
 
 var _url2 = _interopRequireDefault(_url);
-
-var _debug = require('debug');
-
-var _debug2 = _interopRequireDefault(_debug);
 
 var _events = require('events');
 
@@ -74,42 +70,67 @@ var Yeelight = function (_EventEmitter) {
     _this.port = parsedUri.port;
     _this.hostname = parsedUri.hostname;
     _this.supports = data.SUPPORT.split(' ');
+    _this.power = data.POWER;
+    _this.brightness = data.BRIGHT;
+    _this.hue = data.HUE;
+    _this.rgb = data.RGB;
+    _this.sat = data.SAT;
+    _this.colorTemperature = data.CT;
+    _this.mode = data.COLOR_MODE;
 
     _this.reqCount = 1;
-    _this.log = (0, _debug2.default)('Yeelight-' + _this.name);
 
-    _this.socket = new _net2.default.Socket();
+    _this.socket = new _reactNativeTcp2.default.Socket();
 
-    _this.socket.on('end', _this.formatResponse.bind(_this));
+    _this.socket.on('data', _this.formatResponse.bind(_this));
 
     _this.socket.connect(_this.port, _this.hostname, function () {
-      _this.log('connected to ' + _this.name + ' ' + _this.hostname + ':' + _this.port);
       _this.emit('connected');
+    });
+
+    _this.socket.on('end', function () {
+      _this.disconnect();
     });
     return _this;
   }
 
-  /**
-   * sendRequest validates the given params and send the request to the Yeelight
-   * @private
-   *
-   * @param {object} method method to be called 'set_power'
-   * @param {object} params array with params ['on', 'smooth', '1000']
-   * @param {object} schema schema for validation
-   */
+  /*
+  Close socket connection
+  */
 
 
   _createClass(Yeelight, [{
+    key: 'disconnect',
+    value: function disconnect() {
+      this.socket.end();
+      return this;
+    }
+
+    /**
+     * sendRequest validates the given params and send the request to the Yeelight
+     * @private
+     *
+     * @param {object} method method to be called 'set_power'
+     * @param {object} params array with params ['on', 'smooth', '1000']
+     * @param {object} schema schema for validation
+     */
+
+  }, {
     key: 'sendRequest',
     value: function sendRequest(method, params, schema) {
       var _this2 = this;
 
       return new Promise(function (resolve, reject) {
         if (!schema) {
-          schema = _joi2.default.any(); //eslint-disable-line
+          schema = _reactNativeJoi2.default.any(); //eslint-disable-line
         }
 
-        _joi2.default.validate(params, schema, function (err, value) {
+        if (!_this2.supports.includes(method)) {
+          reject(new Error('unsupported method: ' + method));
+          return;
+        }
+
+        _reactNativeJoi2.default.validate(params, schema, function (err, value) {
           if (err) {
             reject(err);
             return;
@@ -120,8 +141,6 @@ var Yeelight = function (_EventEmitter) {
             params: value,
             id: _this2.reqCount
           });
-          _this2.log('sending req: ' + req);
-
           _this2.socket.write(req + '\r\n', function (err) {
             if (err) {
               reject(err);
@@ -145,18 +164,15 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'formatResponse',
     value: function formatResponse(resp) {
-      var json = JSON.parse(resp);
+      var json = JSON.stringify(resp);
+      json = JSON.parse(json);
       var id = json.id;
       var result = json.result;
 
       if (!id) {
-        this.log('got response without id: ' + resp.toString().replace(/\r\n/, ''));
         this.emit('notifcation', json);
         return;
       }
-
-      this.log('got response: ' + resp.toString().replace(/\r\n/, ''));
-
       if (json && json.error) {
         var error = new Error(json.error.message);
         error.code = json.error.code;
@@ -208,7 +224,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setName',
     value: function setName(name) {
-      var schema = _joi2.default.array().items(_joi2.default.string().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.string().required());
       return this.sendRequest('set_name', [name], schema);
     }
 
@@ -227,11 +243,22 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'getValues',
     value: function getValues() {
+      var _this3 = this;
+
       for (var _len = arguments.length, props = Array(_len), _key = 0; _key < _len; _key++) {
         props[_key] = arguments[_key];
       }
 
-      return this.sendRequest('get_prop', props);
+      return new Promise(function (resolve, reject) {
+        _this3.socket.on('response', function (data) {
+          clearTimeout(timeout);
+          resolve(data);
+        });
+        var timeout = setTimeout(function () {
+          reject(new Error('timeout'));
+        }, 5000);
+        _this3.sendRequest('get_prop', props);
+      });
     }
 
     /**
@@ -283,10 +310,10 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setColorTemperature',
     value: function setColorTemperature(temperature) {
-      var effect = arguments.length <= 1 || arguments[1] === undefined ? 'smooth' : arguments[1];
-      var time = arguments.length <= 2 || arguments[2] === undefined ? 1000 : arguments[2];
+      var effect = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'smooth';
+      var time = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1000;
 
-      var schema = _joi2.default.array().items(_joi2.default.number().min(1700).max(6500).required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().min(1700).max(6500).required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_ct_abx', [temperature, effect, time], schema);
     }
 
@@ -310,10 +337,10 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setBrightness',
     value: function setBrightness(brightness) {
-      var effect = arguments.length <= 1 || arguments[1] === undefined ? 'smooth' : arguments[1];
-      var time = arguments.length <= 2 || arguments[2] === undefined ? 1000 : arguments[2];
+      var effect = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'smooth';
+      var time = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1000;
 
-      var schema = _joi2.default.array().items(_joi2.default.number().min(0).max(100).required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().min(0).max(100).required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_bright', [brightness, effect, time], schema);
     }
 
@@ -333,10 +360,10 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'turnOn',
     value: function turnOn() {
-      var effect = arguments.length <= 0 || arguments[0] === undefined ? 'smooth' : arguments[0];
-      var time = arguments.length <= 1 || arguments[1] === undefined ? 1000 : arguments[1];
+      var effect = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'smooth';
+      var time = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1000;
 
-      var schema = _joi2.default.array().items(_joi2.default.any().required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.any().required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_power', ['on', effect, time], schema);
     }
 
@@ -356,10 +383,10 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'turnOff',
     value: function turnOff() {
-      var effect = arguments.length <= 0 || arguments[0] === undefined ? 'smooth' : arguments[0];
-      var time = arguments.length <= 1 || arguments[1] === undefined ? 1000 : arguments[1];
+      var effect = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'smooth';
+      var time = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1000;
 
-      var schema = _joi2.default.array().items(_joi2.default.any().required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.any().required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_power', ['off', effect, time], schema);
     }
 
@@ -388,7 +415,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setScene',
     value: function setScene(params) {
-      var schema = _joi2.default.array().items(_joi2.default.string().allow('color', 'hsv', 'ct', 'auto_delay_off').required(), _joi2.default.any().required(), _joi2.default.any().required(), _joi2.default.any());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.string().allow('color', 'hsv', 'ct', 'auto_delay_off').required(), _reactNativeJoi2.default.any().required(), _reactNativeJoi2.default.any().required(), _reactNativeJoi2.default.any());
       return this.sendRequest('set_scene', params, schema);
     }
 
@@ -411,12 +438,12 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setRGB',
     value: function setRGB(hex) {
-      var effect = arguments.length <= 1 || arguments[1] === undefined ? 'smooth' : arguments[1];
-      var time = arguments.length <= 2 || arguments[2] === undefined ? 1000 : arguments[2];
+      var effect = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'smooth';
+      var time = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1000;
 
       var color = (0, _utils.hexToRgb)(hex);
       var colorDec = color.red * 65536 + color.green * 256 + color.blue;
-      var schema = _joi2.default.array().items(_joi2.default.number().min(0).max(16777215).required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().min(0).max(16777215).required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_rgb', [colorDec, effect, time], schema);
     }
 
@@ -442,10 +469,10 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setHSV',
     value: function setHSV(hue, saturation) {
-      var effect = arguments.length <= 2 || arguments[2] === undefined ? 'smooth' : arguments[2];
-      var time = arguments.length <= 3 || arguments[3] === undefined ? 100 : arguments[3];
+      var effect = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 'smooth';
+      var time = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 100;
 
-      var schema = _joi2.default.array().items(_joi2.default.number().min(0).max(359).required(), _joi2.default.number().min(0).max(100).required(), _joi2.default.string().allow('sudden', 'smooth').required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().min(0).max(359).required(), _reactNativeJoi2.default.number().min(0).max(100).required(), _reactNativeJoi2.default.string().allow('sudden', 'smooth').required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('set_hsv', [hue, saturation, effect, time], schema);
     }
 
@@ -463,7 +490,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'addCron',
     value: function addCron(type, value) {
-      var schema = _joi2.default.array().items(_joi2.default.number().required(), _joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().required(), _reactNativeJoi2.default.number().required());
       return this.sendRequest('cron_add', [type, value], schema);
     }
 
@@ -480,7 +507,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'getCron',
     value: function getCron(index) {
-      var schema = _joi2.default.array().items(_joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().required());
       return this.sendRequest('cron_get', [index], schema);
     }
 
@@ -497,7 +524,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'deleteCron',
     value: function deleteCron(index) {
-      var schema = _joi2.default.array().items(_joi2.default.number().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().required());
       return this.sendRequest('cron_del', [index], schema);
     }
 
@@ -523,7 +550,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setAdjust',
     value: function setAdjust(action, prop) {
-      var schema = _joi2.default.array().items(_joi2.default.string().allow('increase', 'decrease', 'circle').required(), _joi2.default.string().allow('bright', 'ct', 'color').required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.string().allow('increase', 'decrease', 'circle').required(), _reactNativeJoi2.default.string().allow('bright', 'ct', 'color').required());
       return this.sendRequest('set_adjust', [action, prop], schema);
     }
 
@@ -545,7 +572,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'setMusicMode',
     value: function setMusicMode(action, host, port) {
-      var schema = _joi2.default.array().items(_joi2.default.number().allow(0, 1).required(), _joi2.default.string().required(), _joi2.default.number().min(1).max(65535).required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().allow(0, 1).required(), _reactNativeJoi2.default.string().required(), _reactNativeJoi2.default.number().min(1).max(65535).required());
       return this.sendRequest('set_music', [action, host, port], schema);
     }
 
@@ -570,7 +597,7 @@ var Yeelight = function (_EventEmitter) {
   }, {
     key: 'startColorFlow',
     value: function startColorFlow(count, action, flowExpression) {
-      var schema = _joi2.default.array().items(_joi2.default.number().required(), _joi2.default.number().allow(0, 1, 2).required(), _joi2.default.string().required());
+      var schema = _reactNativeJoi2.default.array().items(_reactNativeJoi2.default.number().required(), _reactNativeJoi2.default.number().allow(0, 1, 2).required(), _reactNativeJoi2.default.string().required());
       return this.sendRequest('start_cf', [action, action, flowExpression], schema);
     }
 
