@@ -1,5 +1,5 @@
 {
-  "name": "yeelight-wifi",
+  "name": "react-native-yeelight",
   "version": "2.1.0",
   "description": "Yeelight WiFi lib",
   "main": "build/",
