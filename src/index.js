@@ -3,8 +3,6 @@ import { Client } from 'react-native-ssdp'
 
 import Yeelight from './Yeelight';
 
-let client
-
 /**
  * Create a new instance of the YeelightSearch class
  * and start searching for new Yeelights
@@ -18,9 +16,9 @@ export class YeelightSearch extends EventEmitter {
     super();
 
     this.yeelights = [];
-    client = new Client({ ssdpPort: 1982 });
+    this.client = new Client({ ssdpPort: 1982 });
 
-    client.on('response', (data) => {
+    this.client.on('response', (data) => {
       let yeelight = this.yeelights.find(item => item.getId() === data.ID);
       if (!yeelight) {
         yeelight = new Yeelight(data);
@@ -29,7 +27,7 @@ export class YeelightSearch extends EventEmitter {
       }
     });
 
-    client.search('wifi_bulb');
+    this.client.search('wifi_bulb');
   }
 
   /**
@@ -50,6 +48,6 @@ export class YeelightSearch extends EventEmitter {
   }
 
   stopDiscovery() {
-    client.stop()
+    this.client.stop()
   }
 }
