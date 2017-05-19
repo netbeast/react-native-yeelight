@@ -46,18 +46,6 @@ export default class Yeelight extends EventEmitter {
     this.mode = data.COLOR_MODE
 
     this.reqCount = 1
-
-    this.socket = new net.Socket()
-
-    this.socket.on('data', this.formatResponse.bind(this))
-
-    this.socket.connect(this.port, this.hostname, () => {
-      this.emit('connected')
-    })
-
-    this.socket.on('end', () => {
-      this.disconnect()
-    })
   }
 
   /*
@@ -66,6 +54,14 @@ export default class Yeelight extends EventEmitter {
   disconnect() {
     this.socket.end()
     return this
+  }
+
+  buildRequest(method, params) {
+    return JSON.stringify({
+      method,
+      params,
+      id: this.reqCount,
+    })
   }
 
   /**
@@ -88,22 +84,30 @@ export default class Yeelight extends EventEmitter {
       }
 
       Joi.validate(params, schema, (err, value) => {
-        if (err) {
-          reject(err)
-          return
-        }
+        if (err) return reject(err)
 
-        const req = JSON.stringify({
-          method,
-          params: value,
-          id: this.reqCount,
-        })
-        this.socket.write(`${req}\r\n`, (err) => {
-          if (err) {
+        const req = this.buildRequest(method, value)
+        this.socket = net.connect(this.port, this.hostname, () => {
+          this.emit('connected')
+
+          this.socket.write(`${req}\r\n`, (err) => {
+            if (err) {
+              reject(err)
+            } else {
+              resolve()
+            }
+
+            this.disconnect()
+          })
+
+          this.on('error', (err) => {
             reject(err)
-            return
-          }
-          resolve()
+            this.disconnect()
+          })
+          this.socket.on('data', this.formatResponse.bind(this))
+          this.socket.on('end', () => {
+            this.disconnect()
+          })
         })
         this.reqCount += 1
       })
@@ -118,8 +122,7 @@ export default class Yeelight extends EventEmitter {
    * @param {string} resp response comming from the socket as a json string
    */
   formatResponse(resp) {
-    var json = JSON.stringify(resp)
-    json = JSON.parse(json)
+    const json = JSON.parse(resp)
     const id = json.id
     const result = json.result
 
@@ -132,7 +135,7 @@ export default class Yeelight extends EventEmitter {
       error.code = json.error.code
       this.emit('error', id, error)
     } else {
-      this.emit('response', id, result)
+      this.emit('response', result)
     }
   }
 
@@ -185,14 +188,36 @@ export default class Yeelight extends EventEmitter {
    */
   getValues(...props) {
     return new Promise((resolve, reject) => {
-      this.socket.on('response', (data) => {
-        clearTimeout(timeout)
-        resolve(data)
+      const req = this.buildRequest('get_prop', props)
+      this.socket = net.connect(this.port, this.hostname, () => {
+        this.emit('connected')
+
+        this.on('response', (data) => {
+          clearTimeout(timeout)
+          this.disconnect()
+          resolve(data)
+        })
+
+        this.socket.on('error', (err) => {
+          this.disconnect()
+          reject(err)
+        })
+        this.socket.on('data', this.formatResponse.bind(this))
+        this.socket.on('end', () => {
+          this.disconnect()
+        })
+
+        this.socket.write(`${req}\r\n`, (err) => {
+          if (err) {
+            reject(err)
+          }
+        })
       })
+      this.reqCount += 1
       let timeout = setTimeout(() => {
+        this.disconnect()
         reject(new Error('timeout'))
       }, 5000)
-      this.sendRequest('get_prop', props)
     })
   }
 
