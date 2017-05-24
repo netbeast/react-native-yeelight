@@ -1,6 +1,6 @@
 {
   "name": "react-native-yeelight",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Yeelight WiFi lib",
   "main": "build/",
   "directories": {
@@ -53,11 +53,9 @@
     "url": "https://github.com/pmdroid/yeelight-wifi/issues"
   },
   "homepage": "https://github.com/pmdroid/yeelight-wifi#readme",
-  "dependencies": {
-    "debug": "^2.2.0",
-    "joi": "^10.0.0",
-    "node-ssdp": "^3.0.0",
-    "react-native-joi": "^0.0.5",
-    "react-native-tcp": "^3.2.1"
+  "peerDependencies": {
+    "debug": ">=2.6.8",
+    "react-native-joi": ">=0.0.5",
+    "react-native-tcp": ">=3.2.1"
   }
 }
