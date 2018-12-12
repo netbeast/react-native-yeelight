@@ -7,8 +7,10 @@
     "docs": "docs/",
     "example": "examples/"
   },
+  "dependencies": {
+    "react-native-joi": "^0.0.5"
+  },
   "devDependencies": {
-    "react-native-joi": "^0.0.5",
     "chai": "^3.5.0",
     "codecov": "^1.0.1",
     "documentation": "^4.0.0-beta10",
