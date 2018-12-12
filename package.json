@@ -1,6 +1,6 @@
 {
   "name": "react-native-yeelight",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Yeelight WiFi lib",
   "main": "src/",
   "directories": {
